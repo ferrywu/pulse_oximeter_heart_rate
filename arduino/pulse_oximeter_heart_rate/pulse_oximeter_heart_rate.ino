@@ -2,12 +2,22 @@
 //安裝3個程式庫：1.Adafruit SSD1306、2.MAX30105、3.ESP32Servo
 //關於MAX30102可以參閱文件：https://datasheets.maximintegrated.com/en/ds/MAX30102.pdf
 //https://pdfserv.maximintegrated.com/en/an/AN6409.pdf
+
+#include <WiFi.h>
 #include <Adafruit_GFX.h>        //OLED libraries
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
 #include "MAX30105.h"           //MAX3010x library
 #include "heartRate.h"          //Heart rate calculating algorithm
 #include "ESP32Servo.h"
+
+const char* ssid = "SSID";
+const char* password = "PASSWORD";
+const char* apiKey = "APIKEY";
+const char* resource = "/update?api_key=";
+const char* server = "api.thingspeak.com";
+int lastUpload = 0;
+
 MAX30105 particleSensor;
 int Tonepin = 4;
 //計算心跳用變數
@@ -74,6 +84,90 @@ static const unsigned char PROGMEM O2_bmp[] = {
 };
 
 
+void Wifi_connect() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(10, 20);
+  display.println("Connecting to ");
+  display.setCursor(10, 40);
+  display.print(ssid);
+  display.display();
+  Serial.println("");
+  Serial.println("Connecting to ");
+  Serial.print(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    display.print(".");
+    display.display();
+    Serial.print(".");
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(10, 15);
+  display.println("WiFi connected");
+  display.setCursor(10, 30);
+  display.println("IP address: ");
+  display.setCursor(10, 45);
+  display.println(WiFi.localIP());
+  display.display();
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  delay(500);
+}
+
+
+void thingspeak_upload(double oxygen, int beat) {
+  Serial.print("Connecting to ");
+  Serial.println(server);
+  Serial.println("Uploading data to thingspeak");
+  Serial.print("oxygen"); Serial.print(oxygen);
+  Serial.print("beat"); Serial.print(beat);
+  Serial.println("");
+
+  WiFiClient client;
+
+  if (client.connect(server, 80)) {
+    Serial.println(F("connected"));
+  }
+  else  {
+    Serial.println(F("connection failed"));
+    return;
+  }
+
+  // Upload data to ThingSpeak via HTTP RESTful API
+  Serial.print("Request resource: ");
+  Serial.println(resource);
+  client.print(String("GET ") + resource + apiKey + "&field1=" + oxygen + "&field2=" + beat +
+               " HTTP/1.1\r\n" +
+               "Host: " + server + "\r\n" +
+               "Connection: close\r\n\r\n");
+
+  int timeout = 5 * 10; // 5 seconds
+  while(!!!client.available() && (timeout-- > 0)){
+    delay(100);
+  }
+
+  if(!client.available()) {
+     Serial.println("No response, going back to sleep");
+  }
+  while(client.available()){
+    Serial.write(client.read());
+  }
+  Serial.println("");
+
+  Serial.println("closing connection");
+  client.stop();
+}
+
+
 void setup() {
   Serial.begin(115200);
   Serial.println("System Start");
@@ -100,6 +194,9 @@ void setup() {
 
   particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
   particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
+
+  // connect to WIFI AP
+  Wifi_connect();
 }
 
 
@@ -180,6 +277,11 @@ void loop() {
     }
 
 
+    // upload to ThingSpeak every 20 seconds
+    if (millis() - lastUpload > 20000) {
+      thingspeak_upload(ESpO2, beatAvg);
+      lastUpload = millis();
+    }
   } else {
     //清除心跳數據
     for (byte rx = 0 ; rx < RATE_SIZE ; rx++) rates[rx] = 0;
@@ -187,6 +289,8 @@ void loop() {
     //清除血氧數據
     avered = 0; aveir = 0; sumirrms = 0; sumredrms = 0;
     SpO2 = 0; ESpO2 = 90.0;
+    // reset ThingSpeak upload timer
+    lastUpload = millis();
     //顯示Finger Please
     display.clearDisplay();
     display.setTextSize(2);
