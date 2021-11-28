@@ -3,7 +3,8 @@
 
    Adafruit SSD1306
    MAX30105
-   ESP32Servo
+   ESP32Servo -> for buzzer
+   PubSubClient -> for MQTT
 
    References
 
@@ -15,6 +16,7 @@
 #include "display.h"
 #include "oximeter.h"
 #include "thingspeak_http.h"
+#include "thingspeak_mqtt.h"
 
 int lastUpload = 0;
 
@@ -24,7 +26,8 @@ void setup() {
   display_init();
   delay(3000);
   oximeter_init();
-  thingspeak_http_init();
+  //thingspeak_http_init();
+  thingspeak_mqtt_init();
 }
 
 void loop() {
@@ -34,7 +37,8 @@ void loop() {
   if (oximeter_get_info(&beatAvg, &ESpO2)) {
     // upload to ThingSpeak every 20 seconds
     if (millis() - lastUpload > 20000) {
-      thingspeak_http_upload(ESpO2, beatAvg);
+      //thingspeak_http_upload(ESpO2, beatAvg);
+      thingspeak_mqtt_upload(ESpO2, beatAvg);
       lastUpload = millis();
     }
   } else {

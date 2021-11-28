@@ -2,13 +2,15 @@
 #include "display.h"
 #include "oximeter.h"
 
-const char* ssid = "SSID";
-const char* password = "PASSWORD";
-const char* apiKey = "APIKEY";
-const char* resource = "/update?api_key=";
-const char* server = "api.thingspeak.com";
+#define ssid "SSID"
+#define password "PASSWORD"
 
-void Wifi_connect() {
+#define http_server "api.thingspeak.com"
+#define http_port 80
+#define http_update_key "UPDATE_KEY"
+#define http_update_request "/update?api_key="
+
+static void Wifi_connect() {
   display_wifi_connecting(ssid);
 
   WiFi.begin(ssid, password);
@@ -28,15 +30,15 @@ void thingspeak_http_init(void) {
 
 void thingspeak_http_upload(double oxygen, int beat) {
   Serial.print("Connecting to ");
-  Serial.println(server);
+  Serial.println(http_server);
   Serial.println("Uploading data to thingspeak");
-  Serial.print("oxygen"); Serial.print(oxygen);
-  Serial.print("beat"); Serial.print(beat);
+  Serial.print("oxygen "); Serial.print(oxygen);
+  Serial.print(" beat "); Serial.print(beat);
   Serial.println("");
 
   WiFiClient client;
 
-  if (client.connect(server, 80)) {
+  if (client.connect(http_server, http_port)) {
     Serial.println(F("connected"));
   }
   else  {
@@ -45,11 +47,9 @@ void thingspeak_http_upload(double oxygen, int beat) {
   }
 
   // Upload data to ThingSpeak via HTTP RESTful API
-  Serial.print("Request resource: ");
-  Serial.println(resource);
-  client.print(String("GET ") + resource + apiKey + "&field1=" + oxygen + "&field2=" + beat +
+  client.print(String("GET ") + http_update_request + http_update_key + "&field1=" + oxygen + "&field2=" + beat +
                " HTTP/1.1\r\n" +
-               "Host: " + server + "\r\n" +
+               "Host: " + http_server + "\r\n" +
                "Connection: close\r\n\r\n");
 
   int timeout = 5 * 10; // 5 seconds
